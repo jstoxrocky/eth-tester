@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 
+import functools
 import pkg_resources
 import time
 
@@ -190,6 +191,17 @@ def _get_vm_for_block_number(chain, block_number, mutable=False):
     return vm
 
 
+def add_gas(to_wrap):
+    @functools.wraps(to_wrap)
+    def wrapper(self, transaction, *args, **kwargs):
+        if 'gas' in transaction:
+            return to_wrap(self, transaction, *args, **kwargs)
+        else:
+            estimated_gas = self.estimate_gas(transaction)
+            return to_wrap(self, dict(transaction, gas=estimated_gas), *args, **kwargs)
+    return wrapper
+
+
 class PyEVMBackend(object):
     chain = None
     fork_blocks = None
@@ -377,6 +389,7 @@ class PyEVMBackend(object):
         self.chain.apply_transaction(evm_transaction)
         return evm_transaction.hash
 
+    @add_gas
     def send_transaction(self, transaction):
         signed_evm_transaction = self._get_normalized_and_signed_evm_transaction(
             transaction,
@@ -394,6 +407,7 @@ class PyEVMBackend(object):
 
         return computation.gas_meter.start_gas - computation.gas_meter.gas_remaining
 
+    @add_gas
     def call(self, transaction, block_number="latest"):
         # TODO: move this to the VM level.
         signed_evm_transaction = self._get_normalized_and_signed_evm_transaction(
