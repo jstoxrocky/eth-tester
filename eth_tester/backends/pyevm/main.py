@@ -28,6 +28,7 @@ from eth_tester.exceptions import (
     BlockNotFound,
     TransactionNotFound,
     UnknownFork,
+    ValidationError,
 )
 
 from .serializers import (
@@ -335,7 +336,14 @@ class PyEVMBackend(object):
             transaction_hash,
         )
         is_pending = block.number == self.chain.get_block().number
-        return serialize_transaction_receipt(block, transaction, transaction_index, is_pending)
+        receipt = serialize_transaction_receipt(block, transaction, transaction_index, is_pending)
+
+        if not is_pending and 'contract_address' in receipt:
+            contract_code = self.get_code(receipt['contract_address'])
+            if not contract_code:
+                raise ValidationError("A new contract was mined, but the code() is empty")
+
+        return receipt
 
     #
     # Account state
