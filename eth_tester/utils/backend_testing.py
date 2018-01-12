@@ -500,7 +500,7 @@ class BaseTestBackendDirect(object):
         result = _decode_throws_result('value', raw_result)
         assert result == (1,)
 
-    def test_can_call_after_thrown_transaction(self, eth_tester):
+    def test_can_call_after_exception_raised_calling(self, eth_tester):
         self.skip_if_no_evm_execution()
 
         throws_address = _deploy_throws(eth_tester)
@@ -517,10 +517,33 @@ class BaseTestBackendDirect(object):
             throws_address,
             'value',
         )
-        eth_tester.call(call_value_transaction)
+        raw_result = eth_tester.call(call_value_transaction)
         result = _decode_throws_result('value', raw_result)
         assert result == (1,)
 
+    def test_can_estimate_gas_after_exception_raised_estimating_gas(self, eth_tester):
+        self.skip_if_no_evm_execution()
+
+        throws_address = _deploy_throws(eth_tester)
+        call_willThrow_transaction = _make_call_throws_transaction(
+            eth_tester,
+            throws_address,
+            'willThrow',
+        )
+        with pytest.raises(TransactionFailed):
+            eth_tester.estimate_gas(dissoc(call_willThrow_transaction, 'gas'))
+
+        call_set_value_transaction = _make_call_throws_transaction(
+            eth_tester,
+            throws_address,
+            'setValue',
+            fn_args=(2,),
+        )
+        gas_estimation = eth_tester.estimate_gas(dissoc(call_set_value_transaction, 'gas'))
+        call_set_value_transaction = assoc(call_set_value_transaction, 'gas', gas_estimation)
+        transaction_hash = eth_tester.send_transaction(call_set_value_transaction)
+        receipt = eth_tester.get_transaction_receipt(transaction_hash)
+        assert receipt['gas_used'] == gas_estimation
 
     #
     # Snapshot and Revert
