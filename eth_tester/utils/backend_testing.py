@@ -59,7 +59,14 @@ from .math_contract import (
     _make_call_math_transaction,
     _decode_math_result,
 )
-
+from .throws_contract import (
+    _deploy_throws,
+    _make_call_throws_transaction,
+    _decode_throws_result,
+)
+from ethereum.tester import (
+    TransactionFailed,
+)
 
 PK_A = '0x58d23b55bc9cdce1f18c2500f40ff4ab7245df9a89505e9b1fa4851f623d241d'
 PK_A_ADDRESS = '0xdc544d1aa88ff8bbd2f2aec754b1f1e99e1812fd'
@@ -479,6 +486,41 @@ class BaseTestBackendDirect(object):
         transaction_hash = eth_tester.send_transaction(call_math_transaction)
         receipt = eth_tester.get_transaction_receipt(transaction_hash)
         assert receipt['gas_used'] == gas_estimation
+
+    def test_call_throws_returns1(self, eth_tester):
+        self.skip_if_no_evm_execution()
+
+        throws_address = _deploy_throws(eth_tester)
+        call_throws_transaction = _make_call_throws_transaction(
+            eth_tester,
+            throws_address,
+            'value',
+        )
+        raw_result = eth_tester.call(call_throws_transaction)
+        result = _decode_throws_result('value', raw_result)
+        assert result == (1,)
+
+    def test_can_call_after_thrown_transaction(self, eth_tester):
+        self.skip_if_no_evm_execution()
+
+        throws_address = _deploy_throws(eth_tester)
+        call_willThrow_transaction = _make_call_throws_transaction(
+            eth_tester,
+            throws_address,
+            'willThrow',
+        )
+        with pytest.raises(TransactionFailed):
+            eth_tester.call(call_willThrow_transaction)
+
+        call_value_transaction = _make_call_throws_transaction(
+            eth_tester,
+            throws_address,
+            'value',
+        )
+        eth_tester.call(call_value_transaction)
+        result = _decode_throws_result('value', raw_result)
+        assert result == (1,)
+
 
     #
     # Snapshot and Revert
